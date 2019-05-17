@@ -1,0 +1,238 @@
+# GCP Codes
+
+# troubleshooting, ssh connection getting lost
+#check firewall rules and add if you dont have them
+gcloud compute firewall-rules list
+gcloud compute instances describe instance-2 --format='get(networkInterfaces[0].accessConfigs[0].natIP)'
+gcloud compute instances get-serial-port-output instance-5highpow
+
+gcloud compute project-info describe --project feisty-parity-212123
+
+# determinig number of files in a bucket
+gsutil du gs://objectdetectionfinal/images/train | wc -l
+
+# to check number of files in the current directory
+ls -1 | wc -l
+
+# To move the contents of one local folder into another
+mv ~/googleai/gcmount/images/train/train/* ~/googleai/gcmount/images/train/
+
+
+# to download data from aws to google vm disk
+aws s3 --no-sign-request sync s3://open-images-dataset/train train
+aws s3 --no-sign-request sync s3://open-images-dataset/validation validation
+aws s3 --no-sign-request sync s3://open-images-dataset/challenge2018 challenge2018
+
+# to transfer data from google vm disk to google bucket
+gsutil rsync -r ~/validation gs://objectdetectionfinal/images/train
+gsutil rsync -r ~/train gs://objectdetectionfinal/images/train
+
+gsutil -m cp -r ~/train gs://objectdetectionfinal/images/train
+gsutil -m cp -r ~/validation gs://objectdetectionfinal/images/train
+gsutil -m cp -r ~/challenge2018 gs://objectdetectionfinal/images/test
+
+# to upload local data to google bucket
+gsutil -m cp -r C:\Users\Mukesh\GoogleAI\Model_8_FRCNN\PASCAL_VOC\train_annotations gs://objectdetectionfinal/mx_rcnn/data/OIDdevkit/Annotations/
+
+# Copying an object from one bucket folder to another
+gsutil cp -r gs://objectdetectionfinal/images/train/train* gs://objectdetectionfinal/images/train
+
+
+# to upload files to a google vm
+gcloud compute scp C:/Users/Mukesh/Downloads/cudnn-9.2-linux-x64-v7.1.solitairetheme8 instance-1:/tmp
+
+
+# If you have a large number of objects to remove you might want to use the
+# gsutil -m option, to perform parallel (multi-threaded/multi-processing) removes:
+gsutil -m rm -r gs://objectdetectionfinal/images/test
+
+
+#################### getting started with python on the shell ####################
+# follow beow for a good installation
+https://blog.cambridgespark.com/an-ideal-data-science-environment-on-a-google-virtual-machine-3bb40789b71b
+
+
+## Install the dependencies ##
+# CUDA-
+# Follow https://hackernoon.com/launch-a-gpu-backed-google-compute-engine-instance-and-setup-tensorflow-keras-and-jupyter-902369ed5272
+wget https://developer.nvidia.com/compute/cuda/9.0/Prod/local_installers/cuda-repo-ubuntu1604-9-0-local_9.0.176-1_amd64-deb
+sudo dpkg -i cuda-repo-ubuntu1604-9-0-local_9.0.176-1_amd64-deb
+sudo apt-key add /var/cuda-repo-9-0-local/7fa2af80.pub
+sudo apt-get update
+sudo apt-get install cuda
+
+# cuDNN
+wget https://developer.nvidia.com/compute/machine-learning/cudnn/secure/v7.1.4/prod/9.0_20180516/Ubuntu16_04-x64/libcudnn7-dev_7.1.4.18-1_cuda9.0_amd64
+tar -xzvf libcudnn7-dev_7.1.4.18-1+cuda9.0_amd64
+sudo cp cuda/include/cudnn.h /usr/local/cuda/include
+sudo cp cuda/lib64/libcudnn* /usr/local/cuda/lib64
+sudo chmod a+r /usr/local/cuda/include/cudnn.h
+
+# python
+python --version # for python 3
+sudo apt-get install python3-pip python3-dev
+
+#tensorflow-
+conda install -c conda-forge tensorflow
+conda install -c anaconda tensorflow-gpu
+
+# anaconda
+# follow https://www.digitalocean.com/community/tutorials/how-to-install-the-anaconda-python-distribution-on-ubuntu-16-04
+# to see how you can install for ubuntu
+curl -O https://repo.continuum.io/archive/Anaconda3-5.0.1-Linux-x86_64.sh
+sha256sum Anaconda3-5.0.1-Linux-x86_64.sh
+bash Anaconda3-5.0.1-Linux-x86_64.sh
+source ~/.bashrc
+
+#keras-
+conda install -c conda-forge keras
+
+#numpy, scipy, matplotlib -
+
+
+
+# jupyter
+
+
+
+## test small dataset on jupyter ##
+# Before you train on the cloud, test your package locally to make sure
+# there are no syntactic or semantic errors.
+
+# Step 1: local run using python -m
+%%bash
+TRAIN_DATA_PATHS=path/to/training/data
+OUTPUT_DIR=path/to/output/location
+export PYTHONPATH=${PYTHONPATH}:${PWD}/training_example
+python -m trainer.docopt_task --train_data_paths $TRAIN_DATA_PATHS \
+                                                --output_dir $OUTPUT_DIR \
+                                                --batch_size 100 \
+                                                --hidden_units 50,25,10
+
+
+# Step 2: local run using ml-engine local train
+%%bash
+TRAIN_DATA_PATHS=path/to/training/data
+OUTPUT_DIR=path/to/output/location
+JOBNAME=my_ml_job_$(date -u +%y%m%d_%H%M%S)
+REGION='us-central1'
+BUCKET='my-bucket'
+
+gcloud ml-engine local train \
+                        --package-path=$PWD/training_example/trainer \
+                        --module-name=trainer.task \
+                        -- \
+                        --train_data_paths $TRAIN_DATA_PATHS \
+                        --output_dir $OUTPUT_DIR \
+                        --batch_size 100 \
+                        --hidden_units 50,25,10
+
+## Train on the cloud using ml-engine ##
+# Note the arguments to ml-engine. Those before the empty -- are specific to
+# ML Engine, while those after, named USER_ARGS, are for your package.
+
+%%bash
+TRAIN_DATA_PATHS=path/to/training/data
+OUTPUT_DIR=path/to/output/location
+JOBNAME=my_ml_job_$(date -u +%y%m%d_%H%M%S)
+REGION='us-central1'
+BUCKET='my-bucket-name'
+
+gcloud ml-engine jobs submit training $JOBNAME \
+                                        --package-path=$PWD/training_example/trainer \
+                                        --module-name=trainer.task \
+                                        --region=$REGION \
+                                        --staging-bucket=gs://$BUCKET \
+                                        --scale-tier=BASIC \
+                                        --runtime-version=1.8 \
+                                        -- \
+                                        --train_data_paths $TRAIN_DATA_PATHS \
+                                        --output_dir $OUTPUT_DIR \
+                                        --batch_size 100 \
+                                        --hidden_units 50,25,10
+
+# By building a task.py we can process hyperparameters as command line arguments,
+# which allows us to decouple our model logic from hyperparameters.
+# A key benefit is this allows us to easily fire off multiple jobs in parallel
+# using different parameters to determine an optimal hyperparameter set
+# (we can even use the built in hyperparameter tuning service!).
+
+
+# set the main dir to access the train data and eval data path
+TRAIN_DATA=gs://$BUCKET_NAME/images/train/"".data.csv
+EVAL_DATA=gs://$BUCKET_NAME/images/test/"".test.csv
+
+
+# a way to download the images in the metadata_imageid_train_set
+import csv
+import os
+
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+
+BUCKET_NAME = 'open-images-dataset'
+s3 = boto3.resource('s3', config=Config(signature_version=UNSIGNED))
+
+CLASS_LIST = metadata_imageid_train_set_list
+PATH_TO_SAVE = "E:\\Challenges\\GoogleAI\\"
+
+for img in CLASS_LIST:
+    if img not in PATH_TO_SAVE:
+        key = 'train/'+ img + '.jpg'
+        destination = PATH_TO_SAVE + img + '.jpg'
+        s3.Bucket(BUCKET_NAME).download_file(key, destination)
+
+
+# Environment variables for project and bucket
+import os
+PROJECT = 'cloud-training-demos' # REPLACE WITH YOUR PROJECT ID
+REGION = 'us-central1' # Choose an available region for Cloud MLE from https://cloud.google.com/ml-engine/docs/regions.
+BUCKET = 'cloud-training-demos-ml' # REPLACE WITH YOUR BUCKET NAME. Use a regional bucket in the region you selected.
+
+# for bash
+os.environ['PROJECT'] = PROJECT
+os.environ['BUCKET'] = BUCKET
+os.environ['REGION'] = REGION
+os.environ['TFVERSION'] = '1.4'  # Tensorflow version
+
+%bash
+gcloud config set project $PROJECT
+gcloud config set compute/region $REGION
+
+
+%%bashbash
+ PROJECT_IDPROJECT =$PROJECT
+AUTH_TOKEN=$(gcloud auth print-access-token)
+SVC_ACCOUNT=$(curl -X GET -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $AUTH_TOKEN" \
+    https://ml.googleapis.com/v1/projects/${PROJECT_ID}:getConfig \
+    | python -c "import json; import sys; response = json.load(sys.stdin); \
+    print response['serviceAccount']")
+
+echo "Authorizing the Cloud ML Service account $SVC_ACCOUNT to access files in $BUCKET"
+gsutil -m defacl ch -u $SVC_ACCOUNT:R gs://$BUCKET
+gsutil -m acl ch -u $SVC_ACCOUNT:R -r gs://$BUCKET  # error message (if bucket is empty) can be ignored
+gsutil -m acl ch -u $SVC_ACCOUNT:W gs://$BUCKET
+
+# Find absolute paths to your data
+%bash
+echo $PWD
+rm -rf $PWD/taxi_trained
+cp $PWD/../tensorflow/taxi-train.csv .
+cp $PWD/../tensorflow/taxi-valid.csv .
+
+# USing Cloud Storage Fuse to access bucket like a folder
+install gcfuse following: https://github.com/GoogleCloudPlatform/gcsfuse/blob/master/docs/installing.md
+
+then mkdir and fuse it with the bucket:
+gcsfuse my-bucket /path/to/mount
+
+# the thing is, fuse doesn't show the directories in a bucket so you will have to mkdir with the
+# same name as the object names in your bucket, then when you ls into that, the subfiles will show up
+# only the folders won't show up. then you can access the stuff in your bucket like files and directories
+
+# to set tensorflow backend
+export KERAS_BACKEND=tensorflow
+
+
